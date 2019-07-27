@@ -29,11 +29,12 @@ ggpairs(casas %>%
 
 ```{r}
 hist(casas$price)
-```
-
-
-```{r}
 qqnorm(casas$price)
 qqline(casas$price)
+densidad <- density(casas$price)
+plot(densidad)
+#log -> logaritmo natural
+log_price <- log10(casas$price)
+hist(log_price)
 
 ```

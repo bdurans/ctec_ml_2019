@@ -24,3 +24,16 @@ ggpairs(casas %>%
         select(-id) %>%
         sample_n(1000))
 ```
+
+
+
+```{r}
+hist(casas$price)
+```
+
+
+```{r}
+qqnorm(casas$price)
+qqline(casas$price)
+
+```

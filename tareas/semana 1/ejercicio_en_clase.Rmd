@@ -1,0 +1,26 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r setup, include=FALSE}
+library(readr)
+library(dplyr)
+library(GGally)
+library(visdat)
+
+```
+
+# Leemos datos
+
+Comentario: Nunca usar options(warn -1) i supressWarnings()
+
+
+```{r}
+
+casas <- read.csv('kc_house_data.csv', header = T, na.strings = '?')
+
+ggpairs(casas %>% 
+        select(-id) %>%
+        sample_n(1000))
+```

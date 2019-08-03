@@ -124,3 +124,47 @@ plot(y = casas$price,x = casas$sqft_living, main = 'Relación entre Precio y Met
 
 Como se puede observar tanto en la gráfica como en las correlaciones, existe una tendencia clara en el aumento del precio de las viviendas con respecto a los metros cuadrados. Con este pequeño análisis de los datos podemos elegir las variables predictoras y el modelo inicial, en este caso podemos elegir utilizar una regresión lineal simple utilizando la columna 'sqft_living' como variable predictora.
 
+
+
+```{r}
+
+log_sqft_living <- log10(casas$sqft_living)
+plot(y = casas$price,x = log_sqft_living, main = 'Relación entre Precio y Metros cuadrados', ylab = 'price', xlab = 'sqft_living')
+```
+
+
+```{r}
+hist(log(casas$price))
+hist(log(casas$sqft_living))
+plot(y = log(casas$price),x = log(casas$sqft_living), main = 'Relación entre Precio y Metros cuadrados', ylab = 'price', xlab = 'sqft_living')
+
+```
+
+
+```{r}
+reg <- lm(formula=(log(price) ~ log(sqft_living), data = casas)
+plot(y = log(casas$price),x = log(casas$sqft_living), main = 'Relación entre Precio y Metros cuadrados', ylab = 'price', xlab = 'sqft_living')
+abline(reg, col = "red")
+```
+
+```{r}
+modelo_pred_precio <- lm(formula=(log(price) ~ log(sqft_living) + log(sqft_lot15)), data = casas)
+plot(modelo_pred_precio)
+abline(modelo_pred_precio, col = "red")
+```
+
+```{r}
+modelo_pred_precio <- lm(formula=(log(price) ~ log(sqft_living) + log(sqft_lot15), data = casas)
+plot(modelo_pred_precio)
+abline(modelo_pred_precio, col = "red")
+```
+
+
+```{r}
+plot(log(sqft_living) ~ log(sqft_lot15), data = casas)
+
+mod_pred_area <- lm(log(sqft_living) ~ poly(log(sqft_lot15), 4) , data = casas)
+
+points(fitted(mod_pred_area) ~ log(sqft_lot15), casas, col = "blue")
+
+```

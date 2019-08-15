@@ -1,10 +1,19 @@
 ---
 title: "Regresion"
 output: pdf_document
+editor_options: 
+  chunk_output_type: inline
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(GGally)
+library(caTools)
+library(lessR)
+library(Metrics)
 ```
 
 # Tarea 3.
@@ -35,13 +44,14 @@ Con el fin de analizar y tratar de estimar las millas por galón de diferentes m
 1. Cargue el archivo auto-mpg_g.csv en una variable
 
 ```{r}
-# Escriba su código aqui
+datos_autos <- read.csv("auto-mpg_g.csv")
+head(mpg)
 ```
 
 2. Utilizando Ggpairs cree un gráfico de los atributos del dataset, observe las correlaciones entre atributos
 
 ```{r}
-# Escriba su código aqui
+ggpairs(datos_autos, columns = 1:8)
 ```
 
 3. Separe los datos en 2 conjuntos, uno de entrenamiento y otro de pruebas. Normalmente se trabaja utilizando un 70-80% de los datos para entrenamiento y el resto para pruebas.
@@ -50,7 +60,10 @@ Recuerde fijar una semilla para que el documento sea reproducible.
 
 Pista: https://www.rdocumentation.org/packages/caTools/versions/1.17.1/topics/sample.split
 ```{r}
-# Escriba su código aqui
+set.seed(1)
+msk <- sample.split(datos_autos[,1], SplitRatio = 4/5, group = NULL)
+train <- datos_autos[ msk,]  # use output of sample.split to ...
+test  <- datos_autos[!msk,]
 ```
 
 4. Cree un modelo de regresion lineal utilizando el atributo mpg como la variable objetivo y en base a las correlaciones observadas en el gráfico del punto 2 escoja al menos dos atributos para usarlos como variables predictoras para el modelo.
@@ -60,22 +73,76 @@ Pista: https://www.rdocumentation.org/packages/lessR/versions/1.9.8/topics/reg
 Nota: Al crear el modelo utilice el conjunto de datos de entrenamiento definido en el punto 3.
 
 ```{r}
-# Escriba su código aqui
+regresion <- lm(mpg ~ disp + weight, data=train)
+regresion
 ```
 
 5. Realice predicciones utilizando el conjunto de pruebas y evalue el resultado con la métrica MSE.
 
 Pista: https://www.rdocumentation.org/packages/mltools/versions/0.3.5/topics/mse
 ```{r}
-library(Metrics)
-# Escriba su código aqui
+prediccion <- predict(regresion, test)
+error <- Metrics::mse(test$mpg, prediccion)
+error
 ```
+
+### Análisis
+
+Se realizó una regresión lineal para el atributo mpg con 2 variables predictoras, desplazamiento y peso (*disp y weight*); las cuales poseían las correlaciones más relevantes con relación a la variable principal (**mayores correlaciones negativas**). Este modelo, tal y como se solicitó, se creó utilizando el set de datos de entrenamiento (equivalente a un 80% de los datos) y luego se realizaron las predicciones correspondientes con el conjunto de datos destinados para pruebas. Al calcular el **mse** se obtiene un valor alto, pero también hay que considerar los datos no han sdo normalizados aún.
 
 6. Opcional
 
 6.a Pruebe varios modelos que utilicen diferentes variables y comparar los resultados obtenidos
 
+```{r}
+mala_regresion <- lm(mpg ~ acc + origin, data=train)
+mala_prediccion <- predict(mala_regresion, test)
+mayor_error <- Metrics::mse(test$mpg, mala_prediccion)
+mayor_error
+```
+
+Al crear un modelo con los attributos *aceleración* y *origen* como variables predictores, se obtiene que el **mse** es aún mayor, lo cual era lo esperado ya que las correlaciones de dichas variables con **mpg** no son relevantes (son las más cercanas a cero)
+
 6.b Investigar como implementar en R las técnicas de preprocesado y normalización vistas en clase y aplicarlas a los datos antes de pasarlos al modelo.
 
+```{r}
+datos_autos_normalizados <- read.csv("auto-mpg_g.csv")
 
+datos_autos_normalizados$disp <- log(datos_autos_normalizados$disp)
+datos_autos_normalizados$weight <- log(datos_autos_normalizados$weight)
 
+hist(datos_autos_normalizados$disp, main="Desplazamiento original")
+hist(datos_autos_normalizados$disp, main="Desplazamiento Normalizado")
+
+hist(datos_autos_normalizados$weight, main="Peso original")
+hist(datos_autos_normalizados$weight, main="Peso Normalizado")
+
+```
+
+Podemos ver que ahora el desplazamiento y el peso se acercan más a una distribución normal.
+
+Ahora generamos un set de datos de entrenamiento y pruebas:
+
+```{r}
+set.seed(1)
+relacion_dividida <- sample.split(datos_autos_normalizados[,1], SplitRatio = 4/5, group = NULL)
+entrenamiento <- datos_autos_normalizados[ relacion_dividida,]  # use output of sample.split to ...
+pruebas  <- datos_autos_normalizados[!relacion_dividida,]
+```
+
+Ahora creamos un nuevo modelo con el grupo de datos de entrenamiento:
+
+```{r}
+regresion_mejorada <- lm(mpg ~ disp + weight, data=entrenamiento)
+regresion_mejorada
+```
+
+Y generamos una predicción con los datos de prueba y obtenemos el error cuadrático medio (**mse**):
+
+```{r}
+prediccion_mejorada <- predict(regresion_mejorada, pruebas)
+menor_error <- Metrics::mse(pruebas$mpg, prediccion_mejorada)
+menor_error
+```
+
+Se puede apreciar que después de aplicar un logaritmo a las variables predictoras, el **mse** del modelo es menor. 

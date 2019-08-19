@@ -1,5 +1,4 @@
 ---
-title: "K-Means"
 output: html_document
 ---
 
@@ -8,97 +7,249 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 # Tarea 4.
-# Metodos no supervisados
+## Metodos no supervisados
+### Estudiante:
+* Brian Durán
 
-# Ejercicios 
+## Ejercicios
 
 Librerias
 ```{r}
-library('ggplot2')
+library("ggplot2")
+library(GGally)
+library(reshape2)
+library(visdat)
+library(factoextra)
+library(dplyr)
 ```
 
 1. Desarolle el Análisis del Problema
-```{r}
-# Construya el análisis del problema
-```
+
+Se realizará una revisión de un conjunto de datos que continue el gasto anual en unidades monetarios de los clientes de un distribuidor mayorista. El propósito del análisis es determinar en cuales categorias de productos se encuentra el mayor consumo, además de observar cualquier relación que exista entre las variables. El principal método a utilizar para esto será el algoritmo de agrupamiento K-means.
+
 Fuente del dataset:
-https://archive.ics.uci.edu/ml/datasets/Wholesale+customers
+https://archive.ics.uci.edu/ml/datasets/wholesale+customers
 
 
-2. Cargue el archivo Wholesale customers data.csv en una variable
+2. Cargue el archivo wholesale customers data.csv en una variable
 
 ```{r}
-# Escriba su código aqui
+wholesale <- read.csv("wholesale.csv")
 ```
 
 3. Desarolle el Entendimiento de los Datos
 
+### Información sobre las variables
+
+El conjunto de datos continue 440 filas y 8 variables en total, cuya definición es la siguiente:
+
+1) FRESH: gasto anual (m.u.) en productos frescos (Continuo);
+2) MILK: gasto anual (m.u.) en productos lácteos (Continuo);
+3) GROCERY: gasto anual (m.u.) en productos comestibles (Continuo);
+4) FROZEN: gasto anual (m.u.) en productos congelados (Continuo)
+5) DETERGENTS_PAPER: gasto anual (m.u.) en detergentes y productos de papel (Continuo)
+6) DELICASSEN: gasto anual (m.u.) en productos delicatessen (Continuo);
+7) CANAL: Canal de clientes - Horeca (Hotel / Restaurante / Café) o Canal minorista (Nominal)
+8) REGION: Región de clientes - Lisnon, Oporto u Otro (Nominal)
+
 ```{r}
-# Escriba su código aqui
+head(wholesale)
+```
+
+Estadísticas descriptivas:
+
+```{r}
+summary(wholesale[, 3:8])
+```
+
+Por último, no existen valores faltantes dentro de las variables y las mismas solo poseen datos númericos.
+
+```{r}
+vis_dat(wholesale)
 ```
 
 4. Utilizando barplot cree un gráfico de los atributos del dataset, observe las correlaciones entre atributos
 
 ```{r}
-# Escriba su código aqui
+ggpairs(wholesale[3:8])
+
+barplot(wholesale$Grocery, xlab = "Consumo de Comestibles")
+
+barplot(wholesale$Milk, xlab = "Consumo de Leche")
+
 ```
 
 5. Explique el siguiente gráfico
 
 ```{r}
-#Grafico
-#bxplt <- ggplot(data = melt(Wholesale), aes(x= variable, y = value))
-#bxplt <- bxplt + geom_boxplot()
-#bxplt <- bxplt + facet_wrap(~Channel)
-#bxplt <- bxplt + coord_flip()
-#bxplt <- bxplt + labs(x = 'producto', y  = 'ventas')
-#bxplt <- bxplt + ggtitle('Ventas por producto y por canal')
-#bxplt
 
-# Escriba su código aqui
+melted_wholesale <- melt(data=wholesale, id.vars = c("Channel", "Region"))
+
+#Gráfico
+bxplt <- ggplot(data = melted_wholesale, aes(x= variable, y = value))
+bxplt <- bxplt + geom_boxplot()
+bxplt <- bxplt + facet_wrap(~Channel)
+bxplt <- bxplt + coord_flip()
+bxplt <- bxplt + labs(x = "producto", y  = "ventas")
+bxplt <- bxplt + ggtitle("Ventas por producto y por canal")
+bxplt
 ```
+
+### Definición de los elementos en el gráfico
+
+ a. Cuartil inferior: Es la línea inicial que representa los valores mínimos y se conecta con el rango intercuartil (caja blanca)
+ b. Rango intercuartil (RIC): Se obtiene al restarle el cuartil inferior al superior. Es la caja que se muestra con un línea en el centro y representa la mayor acumulación de los datos en el gráfico. Esta linea representa la media de los datos.
+ c. Cuartil superior: Es la línea que continua después del Rango intercuartil y representa los "mayores" valores.
+ d. Valores atípicos (Outliers): los valores atípicos son los puntos representados en el gráfico.
+
+### Análisis del gráfico:
+
+El gráfico nos permite ver rápidamente que existen valores atípicos en cada una de las categorías, lo cual extiende la escala lo suficiente como para dificultar el análisis de la información. Sin tomar en cuenta estos "outliers", se puede ver que el rango de los gastos para la mayoría de categorías esta en realidad entre 0 y 30000 m.u, mientras que la escala pasa las 100000 m.u, por lo tanto, es recomendable hacer una investagación de los datos para analizar una posible solución que permita mejorar el análisis de los mismos. Ahora bien, observando la información original en el gráfico, se puede determinar fácilmente que en el primer canal, los productos en la categoría "Fresh" son los que representan el mayor gasto; mientras que en el segundo canal, son los de la categoría "Grocery".
 
 6. Cree un modelo de agrupación K- Means
 Para agrupar a los clientes con base al consumo, vamos a utilizar solo las variables Fresh, Milk, Grocery, Frozen, Detergents_Paper y Delicassen. En este caso, vamos a intentar agrupar los clientes en 5 grupos diferentes.
 
 
 ```{r}
-# Escriba su código aqui
+set.seed(1)
+
+wholesale_scaled <- scale(wholesale[,c(3:8)])
 
 #5 Centroides utilizando k-means
-#modelo.agrupacion <- kmeans(Wholesale[,c(3:8)], centers = 5)
+kmeans_result <- kmeans(wholesale_scaled, centers = 5)
 
-#predecir utilizando el modelo para agregar una variable nueva llamada 'cluster' al conjunto de datos
-#Wholesale$cluster <- modelo.agrupacion$cluster
+#predecir utilizando el modelo para agregar una variable nueva llamada "cluster" al conjunto de datos
+wholesale$cluster <- kmeans_result$cluster
 
 #convertir la variable nueva a un factor
-#Wholesale$cluster <- factor(Wholesale$cluster)
+wholesale$cluster <- factor(wholesale$cluster)
+
+fviz_cluster(kmeans_result, wholesale[,c(3:8)], geom = "point")
 
 ```
 
-6. Realice al menos 3 modelos cambiando los centroides 
+
+6. Realice al menos 3 modelos cambiando los centroides
 ```{r}
-# Escriba su código aqui
+set.seed(1)
+
+# 2 Centroides utilizando k-means
+kmeans_two_clusters <- kmeans(wholesale_scaled, centers = 2)
+# 3 Centroides utilizando k-means
+kmeans_three_clusters <- kmeans(wholesale_scaled, centers = 3)
+# 4 Centroides utilizando k-means
+kmeans_four_clusters <- kmeans(wholesale_scaled, centers = 4)
+
+
+fviz_cluster(kmeans_two_clusters, wholesale[,c(3:8)], geom = "point")
+fviz_cluster(kmeans_three_clusters, wholesale[,c(3:8)], geom = "point")
+fviz_cluster(kmeans_four_clusters, wholesale[,c(3:8)], geom = "point")
 ```
 
-7. Evaluacioón del modelo
+7. Evaluación del modelo
 ```{r}
-# Escriba su código aqui
-#Explicacion de los grupos generados
-#by(Wholesale, Wholesale$cluster, summary)
+by(wholesale, wholesale$cluster, summary)
 ```
 
+Por cada uno de los grupos generados podemos ver las estadísticas descriptivas por cada una de las categorías de los productos, valores mínimos, máximos, media, además del total de clientes dentro de cada grupo. Se reafirman características que ya vieron al graficar el modelo **kmeans_result**, como por ejemplo que el cluster 2 posee la menor cantidad de observaciones y el cluster 3, la mayor. 
 
 8. Desarolle al menos 5 conclusiones sobre los grupos realizados
-  * Ejemplo:
-    - Las principales características de cada grupo son:
-      - #### Grupo #1: (2do grupo más pequeño)
-      - Principalmente observaciones de la región 3 y el canal 1.
-      - Muy alto consumo de productos frescos.
-      - Bajo consumo de leche.
-      - Bajo consumo de comestibles.
-      - Alto consumo de alimentos congelados.
-      - Bajo consumo de detergentes.
-      - Bajo consumo de delicassen.
+
+Observaciones de los canales por cluster
+```{r}
+table(wholesale$Channel, kmeans_result$cluster)
+```
+
+Observaciones de las regiones por cluster
+
+```{r}
+table(wholesale$Region, kmeans_result$cluster)
+```
 
 
+
+Gasto total de productos frescos por cluster:
+
+```{r}
+wholesale %>%
+  group_by(cluster) %>%
+  summarise(Fresh = sum(Fresh))
+```
+
+Gasto total de leche por cluster:
+
+```{r}
+wholesale %>%
+  group_by(cluster) %>%
+  summarise(Milk = sum(Milk))
+```
+
+Gasto total de comestibles por cluster:
+
+```{r}
+wholesale %>%
+  group_by(cluster) %>%
+  summarise(Grocery = sum(Grocery))
+```
+
+Gasto total de productos congelados por cluster:
+
+```{r}
+wholesale %>%
+  group_by(cluster) %>%
+  summarise(Frozen = sum(Frozen))
+```
+
+Gasto total de detergente y papel por cluster:
+
+```{r}
+wholesale %>%
+  group_by(cluster) %>%
+  summarise(Detergents_Paper = sum(Detergents_Paper))
+```
+
+
+Gasto total de Delicassen por cluster:
+
+```{r}
+wholesale %>%
+  group_by(cluster) %>%
+  summarise(Delicassen = sum(Delicassen))
+```
+
+# Principales características por grupo:
+
+#### Grupo #1: (Tercer grupo más pequeño)
+ - Principales observaciones en el canal 1 y la región 3
+ - Posee el cliente con el mayor consumo de productos en la categoría "Fresh"
+ - Menor consumo de leche entre todos los grupos
+ - Bajo consumo de comestibles
+ - Bajo consumo de detergentes y papel
+
+#### Grupo #2: (Grupo más pequeño)
+ - Principales observaciones en el canal 2 y la región 3
+ - Posee las observaciones más distantes entre si
+ - Posee el cliente con el mayor consumo de leche
+ - Bajo consumo de productos frescos
+ - Bajo consumo de leche
+
+#### Grupo #3: (Grupo más grande)
+ - Principales observaciones en el canal 1 y la región 3
+ - Posee el cliente con el menor consumo de detergente y papel
+ - Mayor consumo de productos frescos entre todos los grupos
+ - Alto consumo de comestibles
+ - Mayor consumo de productos congelados
+
+#### Grupo #4: (Segundo grupo más pequeño)
+ - Principales observaciones en el canal 2 y la región 3
+ - Bajo consumo de productos frescos
+ - Alto consumo de comestibles
+ - Menor consumo de productos congelados entre todos los grupos
+ - Alto consumo de detergentes y papel
+
+#### Grupo #5: (Segundo grupo más grande)
+ - Principales observaciones en el canal 2 y la región 3
+ - Mayor consumo de leche entre todos los grupos
+ - Mayor consumo de comestibles entre todos los grupos
+ - Mayor consumo de detergentes y papel entre todos los grupos
+ - Alto consumo de Delicassen

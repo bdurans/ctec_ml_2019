@@ -1,5 +1,4 @@
 ---
-title: "Random Forest"
 output: html_document
 ---
 
@@ -7,7 +6,10 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# Tarea 5.
+# Tarea 5
+
+ * Estudiante: Brian Durán
+
 # Metodos supervisados
 
 Librerias
@@ -15,51 +17,302 @@ Librerias
 library(caTools)
 library(rpart)
 library(randomForest)
+library(visdat)
+library(dplyr)
+library(tibble)
+library(rpart.plot)
+library(GGally)
 ```
 
 1. Desarolle el Análisis del Problema
-```{r}
-# Construya el análisis del problema
+
+Este conjunto de datos incluye descripciones de muestras hipotéticas correspondientes a 23 especies de hongos branquiales en el hongo de la familia Agaricus y Lepiota extraídas de la guía de campo de la Sociedad Audubon de hongos de América del Norte (1981). Cada especie se identifica como
+definitivamente comestible, definitivamente venenosa o de comestibilidad desconocida y no se recomienda. Esta última clase se combinó con la venenosa. Dentro de la especificaciones de los datos (archivo *agaricus-lepiota.names* ubicado dentro del directorio) se puede ver que existen una serie de reglas complejas para definir si un hongo es comestible o venenoso, no hay forma sencilla o directa para determinar la clase de una muestra. A continuación se llevará a cabo el procesamiento de los datos para luego utilizar 3 modelos sobre los mismos y elaborar una conclusión. Se utilizara regresión logística, arboles de decisión y bosques aleatorios para el desarrollo del problema.
 
 
-# Este conjunto de datos incluye descripciones de muestras hipotéticas correspondientes a 23 especies de # hongos branquiales en el hongo de la familia Agaricus y Lepiota extraídas de la Guía de campo de la # # Sociedad Audubon de hongos de América del Norte (1981). Cada especie se identifica como definitivamente # comestible, definitivamente venenosa o de comestibilidad desconocida y no se recomienda. Esta última # # clase se combinó con la venenosa. La Guía establece claramente que no existe una regla simple para # # # determinar la comestibilidad de un hongo; ninguna regla como "folletos tres, que así sea" para el # roble venenoso y la hiedra.
-
-```
 Fuente del dataset:
 https://archive.ics.uci.edu/ml/machine-learning-databases/mushroom/agaricus-lepiota.data
 
-1. Cargue el archivo agaricus_lepiota.data.csv en una variable
+2. Cargue el archivo agaricus_lepiota.data.csv en una variable
 
 ```{r}
-# Escriba su código aqui
+mushrooms_col_names <- c("class", "cap_shape", "cap_surface", "cap_color", "bruises", "odor", "gill_attachment", "gill_spacing", "gill_size", "gill_color", "stalk_shape", "stalk_root", "stalk_surface_above_ring", "stalk_surface_below_ring", "stalk_color_above_ring", "stalk_color_below_ring", "veil_type", "veil_color", "ring_number", "ring_type", "spore_print_color", "population", "habitat")
+
+mushrooms_data <- read.csv("agaricus_lepiota_expanded.csv", header=FALSE, na.strings = '?')
+
+colnames(mushrooms_data) <- mushrooms_col_names
 ```
 
-2. Desarolle el Entendimiento de los Datos
+3. Desarolle el Entendimiento de los Datos
+
+El conjunto de datos específicado como **fuente** no contaba con nada más que observaciones, los encabezados fueron tomados del archivo *agaricus-lepiota.names* localizado en el mismo directorio donde se ubica *agaricus-lepiota.data*. Luego de analizar los datos y las carácterísticas a evaluar, se puede ver que el archivo cuenta con 23 columnas, de las cuales, la primer columna corresponde a la clase a la cual pertenece la observación (comestible o venenoso) y el resto a 22 carácterísticas que permitieron determinar la clasificación del hongo. Además por razones de una mejor comprensión del ejercicio se decidio usar el archivo **expanded** para el entendimiento de los datos y las conclusiones, el cual contiene el mismo conjunto de observaciones que *agaricus-lepiota.data*, pero con nombres completos para las características.
 
 ```{r}
-# Escriba su código aqui
+head(mushrooms_data)
 ```
 
-3. Utilizando barplot cree un gráfico de los atributos del dataset, observe las correlaciones entre atributos
+Al analizar los valores originales, parecen no haber valores faltantes
 
 ```{r}
-# Escriba su código aqui
+vis_dat(mushrooms_data)
 ```
 
+Ahora se puede ver con claridad en cuales carácterísticas hay valores faltantes, y parece ser que solo se encuentran dentro de la característica *stalk_root* ("tallo-raíz").
 
-4. Realice al menos 3 modelos vistos en clase
+
+Veamos cuantas ocurrencias hay por cada clase:
+
 ```{r}
-# Escriba su código aqui
+mushrooms_classes <- mushrooms_data %>%
+  group_by(class) %>%
+  summarise(class_count = length(class))
+
+add_row(mushrooms_classes, class="Total", class_count=length(mushrooms_data$class))
 ```
 
-5. Evaluación del modelo
+
+4. Utilizando barplot cree un gráfico de los atributos del dataset, observe las correlaciones entre atributos
+
 ```{r}
-# Escriba su código aqui
+total_observations_by_cap_shape <- mushrooms_data %>%
+  group_by(class, cap_shape) %>%
+  summarize(total = n())
 
+ggplot(total_observations_by_cap_shape) +
+  geom_bar(aes(x = cap_shape, weight = total, fill=class)) +
+  labs(x="Cap Shape", y="Total observations by cap shape")
+
+
+total_observations_by_cap_surface <- mushrooms_data %>%
+  group_by(class, cap_surface) %>%
+  summarize(total = n())
+
+ggplot(total_observations_by_cap_surface) +
+  geom_bar(aes(x = cap_surface, weight = total, fill=class)) +
+  labs(x="Cap Shape", y="Total observations by cap surface")
+
+total_observations_by_cap_color <- mushrooms_data %>%
+  group_by(class, cap_color) %>%
+  summarize(total = n())
+
+ggplot(total_observations_by_cap_color) +
+  geom_bar(aes(x = cap_color, weight = total, fill=class)) +
+  labs(x="Cap Shape", y="Total observations by cap color")
+```
+
+5-6-7. Se desarrollaran 3 métodos supervisados, los cuales serán **árboles de decisión, bosques aleatorios y regresión logística**. Para cada uno de ellos se desarrollará un modelo, se evaluará y se generarán conclusiones.
+
+
+## Arboles de decisión
+
+### Creación del modelo
+
+Primero se crea el conjunto de datos de entrenamiento y prueba.
+
+```{r}
+set.seed(1)
+# Primero se crea un vector de valores lógicos basándose en el data.frame original
+splt <- sample.split(mushrooms_data$class, SplitRatio = 0.7)
+
+# Luego se utiliza el set creado anteriormente para dividir la información en un conjunto de datos de entrenamiento y prueba
+training_mushrooms <- mushrooms_data[splt,] 
+testing_mushrooms <- mushrooms_data[!splt,]
+```
+
+Ahora comprobamos que todas la observaciones fueron incluidas.
+
+```{r}
+nrow(training_mushrooms) + nrow(testing_mushrooms)
+```
+
+Se puede ver que todas las observaciones están presentas.
+
+Ahora se crea el modelo:
+
+
+```{r}
+decision_tree_model <- rpart(class ~ ., data = training_mushrooms, method =  'class')
 ```
 
 
-8. Desarolle al menos 3 conclusiones sobre las clasificaciones de los modelos
+### Evaluación del modelo
 
 
+#### Predicciones.
+
+```{r}
+decisition_tree_predictions <- predict(decision_tree_model, newdata = testing_mushrooms, type = 'class')
+```
+
+#### Gráfico de los resultados
+
+```{r}
+rpart.plot(decision_tree_model,
+           shadow.col = "gray",
+           box.palette="RdBu",
+           main = "Clasificación de Hongos \n(Arbol de decisión)\n")
+```
+
+### Conclusiones
+
+#### Matriz de confusión
+
+```{r}
+confusion_matrix_dt <- table(testing_mushrooms$class, decisition_tree_predictions)
+confusion_matrix_dt
+```
+
+### Métricas a partir de la matriz de confusión
+
+- *Exactitud Total* (observaciones clasificadas apropiadamente) = 99.32%. Hubieron 1346 hongos comestibles y 1161 venenosos clasificados correctamente, mientras que hubieron 17 hongos venenonos clasificados como comestibles.
+
+\begin{equation}Exactitud=\frac{VP+VN}{Total}\end{equation}
+
+```{r}
+print((confusion_matrix_dt[1,1] + confusion_matrix_dt[2,2]) / sum(confusion_matrix_dt) )
+```
+
+- *Sensibilidad* (porcentaje de positivos verdaderos - de las observaciones que realmente son comestibles, ¿cuántas clasificó apropiadamente el modelo?) = 100% (de las 1346 observaciones que son hongos comestibles, 1346 fueron correctamente identificadas).
+
+\begin{equation}\text{Sensibilidad}=\frac{VP}{\text{Total Positivos}}\end{equation}
+
+```{r}
+print( confusion_matrix_dt[1,1] / (confusion_matrix_dt[1,1] + confusion_matrix_dt[1,2]))
+```
+
+- *Precisión* (de las observaciones que el modelo determinó que eran hongos comestibles, ¿cuántas realmente eran hongos comestibles?) = 98.75%. De las 1346 observaciones que fueron clasificadas como comestibles, 1346 sí eran de esa clase, mientras que 17 eran venenosos.
+
+\begin{equation}\text{Precisión}=\frac{VP}{\text{Total clasificados positivos}}\end{equation}
+
+```{r}
+print(confusion_matrix_dt[1,1] / (confusion_matrix_dt[1,1] + confusion_matrix_dt[2,1] ))
+```
+
+- *Especificidad* (porcentaje de negativos verdaderos - en este caso, de las observaciones que realmente son hongos venenosos, ¿cuántas clasificó apropiadamente el modelo?) = 98.55% (de las 1178 observaciones que son hongos venenosos, 1161 fueron correctamente identificadas).
+
+\begin{equation}\text{Especificidad}=\frac{VN}{\text{Total Negativos}}\end{equation}
+
+```{r}
+print( confusion_matrix_dt[2,2] / (confusion_matrix_dt[2,1] + confusion_matrix_dt[2,2]))
+```
+
+
+## Bosques aleatorios
+
+### Creación del modelo
+
+```{r}
+set.seed(1)
+random_forest_model<- randomForest(class ~ odor + cap_surface + cap_shape + spore_print_color, data = training_mushrooms)
+```
+
+### Evaluación del modelo
+
+#### Predicciones
+
+```{r}
+random_forest_predictions <- predict(random_forest_model, newdata = testing_mushrooms, type = 'class')
+```
+
+### Conclusiones
+
+#### Matriz de confusión
+
+```{r}
+confusion_matrix_rf <- table(testing_mushrooms$class, random_forest_predictions)
+confusion_matrix_rf
+```
+
+- *Exactitud Total* (observaciones clasificadas apropiadamente) = 99.36%. Hubieron 1346 hongos comestibles y 1162 venenosos clasificados correctamente, mientras que hubieron 16 hongos venenonos clasificados como comestibles.
+
+\begin{equation}Exactitud=\frac{VP+VN}{Total}\end{equation}
+
+```{r}
+print((confusion_matrix_rf[1,1] + confusion_matrix_rf[2,2]) / sum(confusion_matrix_rf) )
+```
+
+- *Sensibilidad* (porcentaje de positivos verdaderos - de las observaciones que realmente son comestibles, ¿cuántas clasificó apropiadamente el modelo?) = 100% (de las 1346 observaciones que son hongos comestibles, 1346 fueron correctamente identificadas).
+
+\begin{equation}\text{Sensibilidad}=\frac{VP}{\text{Total Positivos}}\end{equation}
+
+```{r}
+print( confusion_matrix_rf[1,1] / (confusion_matrix_rf[1,1] + confusion_matrix_rf[1,2]))
+```
+
+- *Precisión* (de las observaciones que el modelo determinó que eran hongos comestibles, ¿cuántas realmente eran hongos comestibles?) = 98.82%. De las 1346 observaciones que fueron clasificadas como comestibles, 1346 sí eran de esa clase, mientras que 16 eran venenosos.
+
+\begin{equation}\text{Precisión}=\frac{VP}{\text{Total clasificados positivos}}\end{equation}
+
+```{r}
+print(confusion_matrix_rf[1,1] / (confusion_matrix_rf[1,1] + confusion_matrix_rf[2,1] ))
+```
+
+- *Especificidad* (porcentaje de negativos verdaderos - en este caso, de las observaciones que realmente son hongos venenosos, ¿cuántas clasificó apropiadamente el modelo?) = 98.64% (de las 1178 observaciones que son hongos venenosos, 1162 fueron correctamente identificadas).
+
+\begin{equation}\text{Especificidad}=\frac{VN}{\text{Total Negativos}}\end{equation}
+
+```{r}
+print( confusion_matrix_rf[2,2] / (confusion_matrix_rf[2,1] + confusion_matrix_rf[2,2]))
+```
+
+
+## Regresión Logística
+
+### Creación del modelo
+
+```{r}
+logistic_regression_model <- glm(class ~ odor + cap_surface,
+data = training_mushrooms,
+family = binomial)
+```
+
+### Evaluación del modelo
+
+#### Predicciones
+
+```{r}
+logistic_regression_predictions <- predict(logistic_regression_model, newdata = testing_mushrooms, type = 'response')
+```
+
+
+### Conclusiones
+
+#### Matriz de confusión
+
+```{r}
+confusion_matrix_lr <- table(testing_mushrooms$class, logistic_regression_predictions >= 0.5)
+confusion_matrix_lr
+```
+
+- *Exactitud Total* (observaciones clasificadas apropiadamente) = 98.77%. Hubieron 1346 hongos comestibles y 1147 venenosos clasificados correctamente, mientras que hubieron 31 hongos venenonos clasificados como comestibles.
+
+\begin{equation}Exactitud=\frac{VP+VN}{Total}\end{equation}
+
+```{r}
+print((confusion_matrix_lr[1,1] + confusion_matrix_lr[2,2]) / sum(confusion_matrix_lr) )
+```
+
+- *Sensibilidad* (porcentaje de positivos verdaderos - de las observaciones que realmente son comestibles, ¿cuántas clasificó apropiadamente el modelo?) = 100% (de las 1346 observaciones que son hongos comestibles, 1346 fueron correctamente identificadas).
+
+\begin{equation}\text{Sensibilidad}=\frac{VP}{\text{Total Positivos}}\end{equation}
+
+```{r}
+print( confusion_matrix_lr[1,1] / (confusion_matrix_lr[1,1] + confusion_matrix_lr[1,2]))
+```
+
+- *Precisión* (de las observaciones que el modelo determinó que eran hongos comestibles, ¿cuántas realmente eran hongos comestibles?) = 97.74%. De las 1346 observaciones que fueron clasificadas como comestibles, 1346 sí eran de esa clase, mientras que 31 eran venenosos.
+
+\begin{equation}\text{Precisión}=\frac{VP}{\text{Total clasificados positivos}}\end{equation}
+
+```{r}
+print(confusion_matrix_lr[1,1] / (confusion_matrix_lr[1,1] + confusion_matrix_lr[2,1] ))
+```
+
+- *Especificidad* (porcentaje de negativos verdaderos - en este caso, de las observaciones que realmente son hongos venenosos, ¿cuántas clasificó apropiadamente el modelo?) = 97.36% (de las 1178 observaciones que son hongos venenosos, 1147 fueron correctamente identificadas).
+
+\begin{equation}\text{Especificidad}=\frac{VN}{\text{Total Negativos}}\end{equation}
+
+```{r}
+print( confusion_matrix_lr[2,2] / (confusion_matrix_lr[2,1] + confusion_matrix_lr[2,2]))
+```
 

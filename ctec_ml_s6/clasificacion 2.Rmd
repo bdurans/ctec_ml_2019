@@ -1,5 +1,4 @@
 ---
-title: "Clase 6"
 output: html_document
 ---
 
@@ -8,63 +7,106 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 
 # Tarea 6.
-# Metodos supervisados 2
+## Metodos supervisados 2
 
 Librerias
 ```{r}
 library(caTools)
 library(rpart)
+library(dplyr)
+library(visdat)
 #..........Librerias de los modelos
 ```
 
-1. Desarolle el An?lisis del Problema
-```{r}
-# Construya el análisis del problema
+### Análisis del Problema
+
+Construya el análisis del problema
 
 
-# Los datos se obtienen mediante el  parte oficial de tr?nsito que realiza la Direcci?n General de Polic?a de Tr?nsito al presentarse un accidente, los cuales ingresan a la base de datos de dos formas (hand held y papel). Debido a que parte de la labor principal de la Instituci?n es salvar vidas, y por los recursos limitados que existen, se trabaja solo con accidentes con heridos y/o fallecidos; y no se trabaja con accidentes que presentan solo da?os materiales. Adem?s, posteriormente inicia el proceso de limpieza, correcci?n de inconsistencias, validaci?n de algunas variables,  georeferenciaci?n de los accidentes, entre otros.
+Los datos se obtienen mediante el parte oficial de tránsito que realiza la Dirección General de Policía de Tránsito al presentarse un accidente, los cuales ingresan a la base de datos de dos formas (hand held y papel). Debido a que parte de la labor principal de la Institución es salvar vidas, y por los recursos limitados que existen, se trabaja solo con accidentes con heridos y/o fallecidos; y no se trabaja con accidentes que presentan solo daños materiales. 
 
 
-#Accidente con v?ctima se refiere cuando en el accidente de tr?nsito al menos uno de los participantes resulto: herido leve, grave o fallecido.
-
-#Para m?s informaci?n revisar la metodolog?a del documento Memoria estad?stica de accidentes de tr?nsito con v?ctimas.Periodo 2012-2014.
-
-```
 Fuente del dataset:
 http://datosabiertos.csv.go.cr/dashboards/19683/accidentes/
 
-1. Cargue el archivo nombre.csv en una variable
+### Análisis exploratorio
+
+Cargue el archivo nombre.csv en una variable
+
+```{r}
+personas_accidentadas_original <- read.csv("personas_accidentadas.csv", encoding = "UTF-8", na.strings = c("Desconocido", "Desconocida"))
+```
+
+Desarolle el Entendimiento de los Datos
+
+```{r}
+head(personas_accidentadas_original)
+```
+
+Como se mencionó en el análisis del problema, los datos presentan información sobre accidentes de tránsito occuridos en distintos sectores del país. Además podemos observar las siguientes carácterísticas:
+
+Existen 15 carácterísticas en el conjunto de datos, las cuales son:
+
+A_Persona: parece ser un tipo de columna que se originó en alguna consulta, no parece ser relevante para el análisis.
+Rol: El rol de la persona en el accidente. Niveles: Pasajero moto, Motociclista, Conductor, Peatón, Dueño de propiedad, Pasajero carro, Ciclista, Pasajero bus o microbús, Pasajero bicicleta, Otro.
+Tipo.de.lesión: Herido grave, Herido leve, Ileso o Muerte.
+Edad: Edad de la persona involucrada en el accidente.
+Edad.quinquenal: Edad de la persona involucrada en el accidente en quinquenios (rango de 5 años), no parece ser muy relevanta ya qe se cuenta con la edad especifica de dicha persona.
+Sexo: Hombre o Mujer
+Año: Año en el que ocurrió el accidente: 2013 2014 2015 2016 2017 
+Mes: Mes en el que ocurrió el accidente
+Día: Día de la semana en el cual ocurrió el accidente
+Provincia: Provincia en la cual occurrió el accidente
+Cantón: Cantón en la cual occurrió el accidente
+Distrito: Distrito en la cual occurrió el accidente
+Día.1: tiene la misma información que la columna "Día" en un formato diferente, por ejemplo "1.Domingo" en lugar de "Domingo"
+Mes.1: tiene la misma información que la columna "Mes" en un formato diferente, por ejemplo "A. Enero" en lugar de "Enero"
+Edad.quinquenal.1: tiene la misma información que la columna "Edad quinquenal" en un formato diferente, por ejemplo "15 A 19" en lugar de "De 15 a 19"
+
+Basándose en la descripción de variables anterior, se puede ver que la columna "A_Persona", "Día.1", "Mes.1" y "Edad.quinquenal.1" pueden ser removidas del dataframe, ya que no aportan un valor al análisis.
+
+```{r}
+personas_accidentadas <- personas_accidentadas_original %>%
+  select(-c("X.U.FEFF.A_Persona", "Día.1", "Mes.1", "Edad.quinquenal.1"))
+```
+
+#### Análisis de valores faltantes
+
+```{r, cache=TRUE}
+vis_dat(personas_accidentadas, warn_large_data=FALSE)
+```
+
+```{r}
+sum(is.na(personas_accidentadas$Edad))
+sum(is.na(personas_accidentadas$Edad.quinquenal))
+```
+
+
+Utilizando barplot cree un gr?fico de los atributos del dataset, observe las correlaciones entre atributos
 
 ```{r}
 # Escriba su c?digo aqui
 ```
 
-2. Desarolle el Entendimiento de los Datos
 
+### Modelado
+
+Realice al menos 5 modelos de los observados en clase
 ```{r}
 # Escriba su c?digo aqui
 ```
 
-3. Utilizando barplot cree un gr?fico de los atributos del dataset, observe las correlaciones entre atributos
 
-```{r}
-# Escriba su c?digo aqui
-```
-
-
-4. Realice al menos 5 modelos de los observados en clase
-```{r}
-# Escriba su c?digo aqui
-```
-
-5. Evaluaci?n de los modelos
+### Evaluación de los modelos
 ```{r}
 # Escriba su c?digo aqui
 
 ```
 
 
-6. Desarolle al menos 5 conclusiones sobre las clasificaciones de los modelos
+### Conclusiones
+
+Desarolle al menos 5 conclusiones sobre las clasificaciones de los modelos
 
 
 

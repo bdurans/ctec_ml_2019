@@ -15,6 +15,10 @@ library(caTools)
 library(rpart)
 library(dplyr)
 library(visdat)
+library(tidyr)
+library(GGally)
+library(rpart.plot)
+library(randomForest)
 #..........Librerias de los modelos
 ```
 
@@ -34,7 +38,7 @@ http://datosabiertos.csv.go.cr/dashboards/19683/accidentes/
 Cargue el archivo nombre.csv en una variable
 
 ```{r}
-personas_accidentadas_original <- read.csv("personas_accidentadas.csv", encoding = "UTF-8", na.strings = c("Desconocido", "Desconocida"))
+personas_accidentadas_original <- read.csv("personas_accidentadas.csv", encoding = "UTF-8", na.strings = c("Desconocido", "Desconocida"), stringsAsFactors = TRUE)
 ```
 
 Desarolle el Entendimiento de los Datos
@@ -67,7 +71,8 @@ Basándose en la descripción de variables anterior, se puede ver que la columna
 
 ```{r}
 personas_accidentadas <- personas_accidentadas_original %>%
-  select(-c("X.U.FEFF.A_Persona", "Día.1", "Mes.1", "Edad.quinquenal.1"))
+  select(-c("A_Persona", "Edad.quinquenal", "Dia.1", "Mes.1", "Edad.quinquenal.1"))
+personas_accidentadas
 ```
 
 #### Análisis de valores faltantes
@@ -76,33 +81,153 @@ personas_accidentadas <- personas_accidentadas_original %>%
 vis_dat(personas_accidentadas, warn_large_data=FALSE)
 ```
 
-```{r}
-sum(is.na(personas_accidentadas$Edad))
-sum(is.na(personas_accidentadas$Edad.quinquenal))
-```
-
-
-Utilizando barplot cree un gr?fico de los atributos del dataset, observe las correlaciones entre atributos
+Porcentanje de filas con datos nulos
 
 ```{r}
-# Escriba su c?digo aqui
+(sum(is.na(personas_accidentadas$Edad)) / nrow(personas_accidentadas)) * 100
 ```
 
+Los datos nulos se encuentan en las columnas Edad y Edad.quinquenal, dado que contamos con 158,399 entradas y las filas que poseen esos valores nulos representan un %5,18 (8216 entradas) del total de los datos, podemos decir que es seguro removerlos del dataset ya que no tendría un impacto significativo en los modelos.
+
+```{r, cache=TRUE}
+personas_accidentadas <- personas_accidentadas %>% 
+  drop_na()
+vis_dat(personas_accidentadas, warn_large_data=FALSE)
+```
+
+#### Correlaciones entre las variables
+
+
+Total de individuos por rol según el tipo de lesión
+
+```{r}
+accidentes_por_rol <- personas_accidentadas %>%
+  group_by(Rol, TipoLesion) %>%
+  summarize(total = n())
+            
+ggplot(accidentes_por_rol) +
+  geom_bar(aes(x = Rol, weight = total, fill=TipoLesion)) +
+  labs(x="Tipo de lesión", y="Total de individuos por rol") +
+  coord_flip()
+
+```
+
+Total de individuos por provincia según el tipo de lesión
+
+```{r}
+accidentes_por_rol <- personas_accidentadas %>%
+  group_by(Provincia, TipoLesion) %>%
+  summarize(total = n())
+            
+ggplot(accidentes_por_rol) +
+  geom_bar(aes(x = Provincia, weight = total, fill=TipoLesion)) +
+  labs(x="Tipo de lesión", y="Total de individuos por Provincia") +
+  coord_flip()
+
+```
 
 ### Modelado
 
 Realice al menos 5 modelos de los observados en clase
+
+
+#### Árboles de decisión
+
+Datos de entrenamiento y pruebas
+
 ```{r}
-# Escriba su c?digo aqui
+set.seed(1)
+# Primero se crea un vector de valores lógicos basándose en el data.frame original
+splt <- sample.split(personas_accidentadas$TipoLesion, SplitRatio = 0.7)
+# Luego se utiliza el set creado anteriormente para dividir la información en un conjunto de datos de entrenamiento y prueba
+datos_entrenamiento <- personas_accidentadas[splt,] 
+datos_prueba <- personas_accidentadas[!splt,]
+```
+
+##### Creación del modelo
+
+```{r, cache=TRUE}
+modelo_arbol_decision <- rpart(TipoLesion ~ Rol, data = datos_entrenamiento, method =  'class')
+```
+
+##### Evaluación del modelo
+
+Predicciones:
+
+```{r}
+predicciones_arbol_decision <- predict(modelo_arbol_decision, newdata = datos_prueba, type = 'class')
 ```
 
 
-### Evaluación de los modelos
-```{r}
-# Escriba su c?digo aqui
+#### Bosques aleatorios
 
+##### Creación del modelo
+
+```{r}
+set.seed(1)
+modelo_bosque_aleatorio <- randomForest(TipoLesion ~ Rol, data = datos_entrenamiento)
 ```
 
+##### Evaluación del modelo
+
+Predicciones:
+
+```{r}
+predicciones_bosque_aleatorio <- predict(modelo_bosque_aleatorio, newdata = datos_prueba, type = 'class')
+```
+
+#### Regresión Logística
+
+##### Creación del modelo
+
+```{r}
+modelo_regresion_logistica <- glm(TipoLesion ~ Rol, data = datos_entrenamiento, family = binomial)
+```
+
+##### Evaluación del modelo
+
+Predicciones:
+
+```{r}
+predicciones_regresion_logistica <- predict(modelo_regresion_logistica, newdata = datos_prueba, type = 'response')
+```
+
+#### SVM
+
+##### Creación del modelo
+
+```{r, cache=True}
+modelo_svm <- svm(TipoLesion ~ Rol, data = datos_entrenamiento, kernel='linear',cross=2, scale=FALSE)
+```
+
+##### Evaluación del modelo
+
+Predicciones:
+
+```{r, cache=True}
+prediccion_svm <- predict(modelo_svm , newdata = datos_prueba)
+```
+
+#### Redes Neuronales
+
+##### Creación del modelo
+
+```{r}
+m <- model.matrix( 
+   ~TipoLesion + Rol,
+  data = datos_entrenamiento 
+)
+
+modelo_red_neuronal <- neuralnet(TipoLesion ~ Rol, data = m, hidden=4, rep=1, linear.output=T, stepmax=1e6)
+```
+
+##### Evaluación del modelo
+
+Predicciones:
+
+```{r}
+prediccion_svm <- predict(modelo_svm , newdata = datos_prueba)
+```
 
 ### Conclusiones
 

@@ -9,8 +9,10 @@ knitr::opts_chunk$set(echo = TRUE)
 # Tarea 6.
 ## Metodos supervisados 2
 
+ * Estudiante: Brian Durán
+
 Librerias
-```{r}
+```{r, message=FALSE}
 library(caTools)
 library(rpart)
 library(dplyr)
@@ -19,6 +21,8 @@ library(tidyr)
 library(GGally)
 library(rpart.plot)
 library(randomForest)
+library(neuralnet)
+library(e1071)
 #..........Librerias de los modelos
 ```
 
@@ -35,44 +39,44 @@ http://datosabiertos.csv.go.cr/dashboards/19683/accidentes/
 
 ### Análisis exploratorio
 
-Cargue el archivo nombre.csv en una variable
+Cargue el archivo en una variable
 
 ```{r}
 personas_accidentadas_original <- read.csv("personas_accidentadas.csv", encoding = "UTF-8", na.strings = c("Desconocido", "Desconocida"), stringsAsFactors = TRUE)
 ```
 
-Desarolle el Entendimiento de los Datos
+Desarolle el entendimiento de los datos
 
 ```{r}
 head(personas_accidentadas_original)
 ```
 
-Como se mencionó en el análisis del problema, los datos presentan información sobre accidentes de tránsito occuridos en distintos sectores del país. Además podemos observar las siguientes carácterísticas:
+Como se mencionó en el análisis del problema, los datos presentan información sobre accidentes de tránsito occurridos en distintos sectores del país.
 
 Existen 15 carácterísticas en el conjunto de datos, las cuales son:
 
-A_Persona: parece ser un tipo de columna que se originó en alguna consulta, no parece ser relevante para el análisis.
-Rol: El rol de la persona en el accidente. Niveles: Pasajero moto, Motociclista, Conductor, Peatón, Dueño de propiedad, Pasajero carro, Ciclista, Pasajero bus o microbús, Pasajero bicicleta, Otro.
-Tipo.de.lesión: Herido grave, Herido leve, Ileso o Muerte.
-Edad: Edad de la persona involucrada en el accidente.
-Edad.quinquenal: Edad de la persona involucrada en el accidente en quinquenios (rango de 5 años), no parece ser muy relevanta ya qe se cuenta con la edad especifica de dicha persona.
-Sexo: Hombre o Mujer
-Año: Año en el que ocurrió el accidente: 2013 2014 2015 2016 2017 
-Mes: Mes en el que ocurrió el accidente
-Día: Día de la semana en el cual ocurrió el accidente
-Provincia: Provincia en la cual occurrió el accidente
-Cantón: Cantón en la cual occurrió el accidente
-Distrito: Distrito en la cual occurrió el accidente
-Día.1: tiene la misma información que la columna "Día" en un formato diferente, por ejemplo "1.Domingo" en lugar de "Domingo"
-Mes.1: tiene la misma información que la columna "Mes" en un formato diferente, por ejemplo "A. Enero" en lugar de "Enero"
-Edad.quinquenal.1: tiene la misma información que la columna "Edad quinquenal" en un formato diferente, por ejemplo "15 A 19" en lugar de "De 15 a 19"
+* A_Persona: parece ser un tipo de columna que se originó en alguna consulta, no parece ser relevante para el análisis.
+* Rol: El rol de la persona en el accidente. Niveles: Pasajero moto, Motociclista, Conductor, Peatón, Dueño de propiedad, Pasajero carro, Ciclista, Pasajero bus o microbús, Pasajero bicicleta, Otro.
+* TipoLesion: Herido grave, Herido leve, Ileso o Muerte.
+* Edad: Edad de la persona involucrada en el accidente.
+* Edad.quinquenal: Edad de la persona involucrada en el accidente en quinquenios (rango de 5 años), no parece ser muy relevante ya qe se cuenta con la edad especifica de dicha persona.
+* Sexo: Hombre o Mujer
+* Año: Año en el que ocurrió el accidente: 2013 2014 2015 2016 2017 
+* Mes: Mes en el que ocurrió el accidente
+* Día: Día de la semana en el cual ocurrió el accidente
+* Provincia: Provincia en la cual occurrió el accidente
+* Cantón: Cantón en la cual occurrió el accidente
+* Distrito: Distrito en la cual occurrió el accidente
+* Día.1: tiene la misma información que la columna "Día" en un formato diferente, por ejemplo "1.Domingo" en lugar de "Domingo"
+* Mes.1: tiene la misma información que la columna "Mes" en un formato diferente, por ejemplo "A. Enero" en lugar de "Enero"
+* Edad.quinquenal.1: tiene la misma información que la columna "Edad quinquenal" en un formato diferente, por ejemplo "15 A 19" en lugar de "De 15 a 19"
 
 Basándose en la descripción de variables anterior, se puede ver que la columna "A_Persona", "Día.1", "Mes.1" y "Edad.quinquenal.1" pueden ser removidas del dataframe, ya que no aportan un valor al análisis.
 
 ```{r}
 personas_accidentadas <- personas_accidentadas_original %>%
   select(-c("A_Persona", "Edad.quinquenal", "Dia.1", "Mes.1", "Edad.quinquenal.1"))
-personas_accidentadas
+head(personas_accidentadas)
 ```
 
 #### Análisis de valores faltantes
@@ -95,8 +99,15 @@ personas_accidentadas <- personas_accidentadas %>%
 vis_dat(personas_accidentadas, warn_large_data=FALSE)
 ```
 
-#### Correlaciones entre las variables
+Para este conjunto de datos las clases que se van a tomar en cuenta serán si el individuo resultó **ileso** o nó después del accidente, por lo tanto para la columna *TipoLesion* cada aparición de la palabra **Ileso** se conservará tal y como está y el resto de valores (Herido leve, Herido grave y Muerte) se van a substituir por **No Ileso**.
 
+```{r}
+personas_accidentadas$TipoLesion <- as.character(personas_accidentadas$TipoLesion)
+personas_accidentadas$TipoLesion[personas_accidentadas$TipoLesion %in% c("Herido leve", "Herido grave", "Muerte")] <- "No_ileso"
+personas_accidentadas$TipoLesion <- factor(personas_accidentadas$TipoLesion)
+```
+
+#### Correlaciones entre las variables
 
 Total de individuos por rol según el tipo de lesión
 
@@ -121,7 +132,7 @@ accidentes_por_rol <- personas_accidentadas %>%
             
 ggplot(accidentes_por_rol) +
   geom_bar(aes(x = Provincia, weight = total, fill=TipoLesion)) +
-  labs(x="Tipo de lesión", y="Total de individuos por Provincia") +
+  labs(x="Estado del individuo", y="Total de individuos por Provincia") +
   coord_flip()
 
 ```
@@ -129,9 +140,6 @@ ggplot(accidentes_por_rol) +
 ### Modelado
 
 Realice al menos 5 modelos de los observados en clase
-
-
-#### Árboles de decisión
 
 Datos de entrenamiento y pruebas
 
@@ -143,6 +151,8 @@ splt <- sample.split(personas_accidentadas$TipoLesion, SplitRatio = 0.7)
 datos_entrenamiento <- personas_accidentadas[splt,] 
 datos_prueba <- personas_accidentadas[!splt,]
 ```
+
+#### Árboles de decisión
 
 ##### Creación del modelo
 
@@ -196,7 +206,7 @@ predicciones_regresion_logistica <- predict(modelo_regresion_logistica, newdata 
 
 ##### Creación del modelo
 
-```{r, cache=True}
+```{r}
 modelo_svm <- svm(TipoLesion ~ Rol, data = datos_entrenamiento, kernel='linear',cross=2, scale=FALSE)
 ```
 
@@ -204,7 +214,7 @@ modelo_svm <- svm(TipoLesion ~ Rol, data = datos_entrenamiento, kernel='linear',
 
 Predicciones:
 
-```{r, cache=True}
+```{r}
 prediccion_svm <- predict(modelo_svm , newdata = datos_prueba)
 ```
 
@@ -214,24 +224,30 @@ prediccion_svm <- predict(modelo_svm , newdata = datos_prueba)
 
 ```{r}
 m <- model.matrix( 
-   ~TipoLesion + Rol,
+  ~TipoLesion + Rol,
   data = datos_entrenamiento 
 )
 
-modelo_red_neuronal <- neuralnet(TipoLesion ~ Rol, data = m, hidden=4, rep=1, linear.output=T, stepmax=1e6)
+modelo_red_neuronal <- neuralnet(TipoLesionNo_ileso ~ RolConductor + RolMotociclista, data = m, hidden=4, rep=1, linear.output=T, stepmax=1e6)
 ```
 
 ##### Evaluación del modelo
 
+```{r}
+plot(modelo_red_neuronal,rep="best")
+```
+
 Predicciones:
 
 ```{r}
-prediccion_svm <- predict(modelo_svm , newdata = datos_prueba)
+
+mp <- model.matrix( 
+  ~TipoLesion + Rol,
+  data = datos_prueba
+)
+
+predicciones_red_neuronal <- neuralnet::compute(modelo_red_neuronal,mp[,c("RolConductor","RolMotociclista")])
+
+results <- data.frame(actual = mp, prediction = predicciones_red_neuronal$net.result)
+head(results)
 ```
-
-### Conclusiones
-
-Desarolle al menos 5 conclusiones sobre las clasificaciones de los modelos
-
-
-

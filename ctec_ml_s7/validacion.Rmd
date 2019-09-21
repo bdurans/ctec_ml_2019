@@ -1,0 +1,489 @@
+---
+title: "Clase 7"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Tarea 7.
+# Validación
+
+ * Estudiante: Brian Durán
+
+Librerias
+```{r, message=FALSE}
+library(caTools)
+library(rpart)
+library(dplyr)
+library(visdat)
+library(tidyr)
+library(GGally)
+library(rpart.plot)
+library(randomForest)
+library(neuralnet)
+library(e1071)
+library(ROCR)
+#..........Librerias de los modelos
+```
+
+### Análisis del Problema
+
+Construya el análisis del problema
+
+
+Los datos se obtienen mediante el parte oficial de tránsito que realiza la Dirección General de Policía de Tránsito al presentarse un accidente, los cuales ingresan a la base de datos de dos formas (hand held y papel). Debido a que parte de la labor principal de la Institución es salvar vidas, y por los recursos limitados que existen, se trabaja solo con accidentes con heridos y/o fallecidos; y no se trabaja con accidentes que presentan solo daños materiales. 
+
+
+Fuente del dataset:
+http://datosabiertos.csv.go.cr/dashboards/19683/accidentes/
+
+### Análisis exploratorio
+
+Cargue el archivo en una variable
+
+```{r}
+personas_accidentadas_original <- read.csv("personas_accidentadas.csv", encoding = "UTF-8", na.strings = c("Desconocido", "Desconocida"), stringsAsFactors = TRUE)
+```
+
+Desarolle el entendimiento de los datos
+
+```{r}
+head(personas_accidentadas_original)
+```
+
+Como se mencionó en el análisis del problema, los datos presentan información sobre accidentes de tránsito occurridos en distintos sectores del país.
+
+Existen 15 carácterísticas en el conjunto de datos, las cuales son:
+
+* A_Persona: parece ser un tipo de columna que se originó en alguna consulta, no parece ser relevante para el análisis.
+* Rol: El rol de la persona en el accidente. Niveles: Pasajero moto, Motociclista, Conductor, Peatón, Dueño de propiedad, Pasajero carro, Ciclista, Pasajero bus o microbús, Pasajero bicicleta, Otro.
+* TipoLesion: Herido grave, Herido leve, Ileso o Muerte.
+* Edad: Edad de la persona involucrada en el accidente.
+* Edad.quinquenal: Edad de la persona involucrada en el accidente en quinquenios (rango de 5 años), no parece ser muy relevante ya qe se cuenta con la edad especifica de dicha persona.
+* Sexo: Hombre o Mujer
+* Año: Año en el que ocurrió el accidente: 2013 2014 2015 2016 2017 
+* Mes: Mes en el que ocurrió el accidente
+* Día: Día de la semana en el cual ocurrió el accidente
+* Provincia: Provincia en la cual occurrió el accidente
+* Cantón: Cantón en la cual occurrió el accidente
+* Distrito: Distrito en la cual occurrió el accidente
+* Día.1: tiene la misma información que la columna "Día" en un formato diferente, por ejemplo "1.Domingo" en lugar de "Domingo"
+* Mes.1: tiene la misma información que la columna "Mes" en un formato diferente, por ejemplo "A. Enero" en lugar de "Enero"
+* Edad.quinquenal.1: tiene la misma información que la columna "Edad quinquenal" en un formato diferente, por ejemplo "15 A 19" en lugar de "De 15 a 19"
+
+Basándose en la descripción de variables anterior, se puede ver que la columna "A_Persona", "Día.1", "Mes.1" y "Edad.quinquenal.1" pueden ser removidas del dataframe, ya que no aportan un valor al análisis.
+
+```{r}
+personas_accidentadas <- personas_accidentadas_original %>%
+  select(-c("A_Persona", "Edad.quinquenal", "Dia.1", "Mes.1", "Edad.quinquenal.1"))
+head(personas_accidentadas)
+```
+
+#### Análisis de valores faltantes
+
+```{r, cache=TRUE}
+vis_dat(personas_accidentadas, warn_large_data=FALSE)
+```
+
+Porcentanje de filas con datos nulos
+
+```{r}
+(sum(is.na(personas_accidentadas$Edad)) / nrow(personas_accidentadas)) * 100
+```
+
+Los datos nulos se encuentan en las columnas Edad y Edad.quinquenal, dado que contamos con 158,399 entradas y las filas que poseen esos valores nulos representan un %5,18 (8216 entradas) del total de los datos, podemos decir que es seguro removerlos del dataset ya que no tendría un impacto significativo en los modelos.
+
+```{r, cache=TRUE}
+personas_accidentadas <- personas_accidentadas %>%
+  drop_na()
+vis_dat(personas_accidentadas, warn_large_data=FALSE)
+```
+
+Para este conjunto de datos las clases que se van a tomar en cuenta serán si el individuo resultó **ileso** o nó después del accidente, por lo tanto para la columna *TipoLesion* cada aparición de la palabra **Ileso** se conservará tal y como está y el resto de valores (Herido leve, Herido grave y Muerte) se van a substituir por **No Ileso**.
+
+```{r}
+personas_accidentadas$TipoLesion <- as.character(personas_accidentadas$TipoLesion)
+personas_accidentadas$TipoLesion[personas_accidentadas$TipoLesion %in% c("Herido leve", "Herido grave", "Muerte")] <- "No_ileso"
+personas_accidentadas$TipoLesion <- factor(personas_accidentadas$TipoLesion)
+```
+
+#### Correlaciones entre las variables
+
+Total de individuos por rol según el tipo de lesión
+
+```{r}
+accidentes_por_rol <- personas_accidentadas %>%
+  group_by(Rol, TipoLesion) %>%
+  summarize(total = n())
+            
+ggplot(accidentes_por_rol) +
+  geom_bar(aes(x = Rol, weight = total, fill=TipoLesion)) +
+  labs(x="Tipo de lesión", y="Total de individuos por rol") +
+  coord_flip()
+
+```
+
+Total de individuos por provincia según el tipo de lesión
+
+```{r}
+accidentes_por_rol <- personas_accidentadas %>%
+  group_by(Provincia, TipoLesion) %>%
+  summarize(total = n())
+            
+ggplot(accidentes_por_rol) +
+  geom_bar(aes(x = Provincia, weight = total, fill=TipoLesion)) +
+  labs(x="Estado del individuo", y="Total de individuos por Provincia") +
+  coord_flip()
+
+```
+
+### Modelado
+
+Realice al menos 5 modelos de los observados en clase
+
+Datos de entrenamiento y pruebas
+
+```{r}
+set.seed(1)
+# Primero se crea un vector de valores lógicos basándose en el data.frame original
+splt <- sample.split(personas_accidentadas$TipoLesion, SplitRatio = 0.7)
+# Luego se utiliza el set creado anteriormente para dividir la información en un conjunto de datos de entrenamiento y prueba
+datos_entrenamiento <- personas_accidentadas[splt,] 
+datos_prueba <- personas_accidentadas[!splt,]
+```
+
+#### Árboles de decisión
+
+##### Creación del modelo
+
+```{r, cache=TRUE}
+modelo_arbol_decision <- rpart(TipoLesion ~ Rol, data = datos_entrenamiento, method =  'class')
+```
+
+##### Evaluación del modelo
+
+Predicciones:
+
+```{r}
+predicciones_arbol_decision <- predict(modelo_arbol_decision, newdata = datos_prueba, type = 'class')
+```
+
+
+###### Matriz de confusión
+
+```{r}
+matriz_confusion_dt <- table(datos_prueba$TipoLesion, predicciones_arbol_decision)
+matriz_confusion_dt
+```
+
+**Métricas a partir de la matriz de confusión**
+
+- *Exactitud Total* (observaciones clasificadas apropiadamente) = 84.49%. Hubieron 16731 *Ilesos* y 21340 *No Ilesos* clasificados correctamente, mientras que hubieron 4998 *No Ilesos* y 1986 *Ilesos* clasificados incorrectamente.
+
+\begin{equation}Exactitud=\frac{VP+VN}{Total}\end{equation}
+
+```{r}
+print((matriz_confusion_dt[1,1] + matriz_confusion_dt[2,2]) / sum(matriz_confusion_dt) )
+```
+
+- *Sensibilidad* (porcentaje de positivos verdaderos - de los individuos que realmente resultaron *Ilesos*, ¿cuántas clasificó apropiadamente el modelo?) = 89.38%. (De los 18717 individuos que resultaron *Ilesos*, 16731 fueron clasificados correctamente) 
+
+\begin{equation}\text{Sensibilidad}=\frac{VP}{\text{Total Positivos}}\end{equation}
+
+```{r}
+print(matriz_confusion_dt[1,1] / (matriz_confusion_dt[1,1] + matriz_confusion_dt[1,2]))
+```
+
+- *Precisión* (de las individuos que el modelo determinó que salieron *Ilesos*, ¿cuántos realmente resultaron *Ilesos*?) = 0.76%. De los 18717 individuos que resultaron *Ilesos*, 16731 fueron clasificados correctamente, mientras que 4998 resultaron heridos/muertos.
+
+\begin{equation}\text{Precisión}=\frac{VP}{\text{Total clasificados positivos}}\end{equation}
+
+```{r}
+print(matriz_confusion_dt[1,1] / (matriz_confusion_dt[1,1] + matriz_confusion_dt[2,1] ))
+```
+
+- *Especificidad* (porcentaje de negativos verdaderos - en este caso, de los individuos que realmente resultaron *No Ilesos*, ¿cuántas clasificó apropiadamente el modelo?) = 81.02% (de las 26,338 *No Ilesos*, 21340 fueron correctamente clasificados).
+
+\begin{equation}\text{Especificidad}=\frac{VN}{\text{Total Negativos}}\end{equation}
+
+```{r}
+print(matriz_confusion_dt[2,2] / (matriz_confusion_dt[2,1] + matriz_confusion_dt[2,2]))
+```
+
+###### Curva ROC
+
+```{r}
+prediccionesROC = ROCR::prediction(c(predicciones_arbol_decision), c(datos_prueba[,'TipoLesion']))
+as.numeric(performance(prediccionesROC, "auc")@y.values)
+
+plot(performance(prediccionesROC, "tpr", "fpr"),
+colorize = T,
+print.cutoffs.at = seq(0,1,by = 0.1),
+text.adj = c(-0.2,1.7),
+main = 'Curva ROC del modelo')
+```
+
+
+#### Bosques aleatorios
+
+##### Creación del modelo
+
+```{r}
+set.seed(1)
+modelo_bosque_aleatorio <- randomForest(TipoLesion ~ Rol, data = datos_entrenamiento)
+```
+
+##### Evaluación del modelo
+
+Predicciones:
+
+```{r}
+predicciones_bosque_aleatorio <- predict(modelo_bosque_aleatorio, newdata = datos_prueba, type = 'class')
+```
+
+###### Matriz de confusión
+
+```{r}
+matriz_confusion_rf <- table(datos_prueba$TipoLesion, predicciones_bosque_aleatorio)
+matriz_confusion_rf
+```
+
+**Métricas a partir de la matriz de confusión**
+
+- *Exactitud Total* (observaciones clasificadas apropiadamente) = 84.49%. Hubieron 16731 *Ilesos* y 21340 *No Ilesos* clasificados correctamente, mientras que hubieron 4998 *No Ilesos* y 1986 *Ilesos* clasificados incorrectamente.
+
+\begin{equation}Exactitud=\frac{VP+VN}{Total}\end{equation}
+
+```{r}
+print((matriz_confusion_rf[1,1] + matriz_confusion_rf[2,2]) / sum(matriz_confusion_rf) )
+```
+
+- *Sensibilidad* (porcentaje de positivos verdaderos - de los individuos que realmente resultaron *Ilesos*, ¿cuántas clasificó apropiadamente el modelo?) = 89.38%. (De los 18717 individuos que resultaron *Ilesos*, 16731 fueron clasificados correctamente) 
+
+\begin{equation}\text{Sensibilidad}=\frac{VP}{\text{Total Positivos}}\end{equation}
+
+```{r}
+print(matriz_confusion_rf[1,1] / (matriz_confusion_rf[1,1] + matriz_confusion_rf[1,2]))
+```
+
+- *Precisión* (de las individuos que el modelo determinó que salieron *Ilesos*, ¿cuántos realmente resultaron *Ilesos*?) = 0.76%. De los 18717 individuos que resultaron *Ilesos*, 16731 fueron clasificados correctamente, mientras que 4998 resultaron heridos/muertos.
+
+\begin{equation}\text{Precisión}=\frac{VP}{\text{Total clasificados positivos}}\end{equation}
+
+```{r}
+print(matriz_confusion_rf[1,1] / (matriz_confusion_rf[1,1] + matriz_confusion_rf[2,1] ))
+```
+
+- *Especificidad* (porcentaje de negativos verdaderos - en este caso, de los individuos que realmente resultaron *No Ilesos*, ¿cuántas clasificó apropiadamente el modelo?) = 81.02% (de las 26,338 *No Ilesos*, 21340 fueron correctamente clasificados).
+
+\begin{equation}\text{Especificidad}=\frac{VN}{\text{Total Negativos}}\end{equation}
+
+```{r}
+print(matriz_confusion_rf[2,2] / (matriz_confusion_rf[2,1] + matriz_confusion_rf[2,2]))
+```
+
+###### Curva ROC
+
+```{r}
+prediccionesROC = ROCR::prediction(c(predicciones_bosque_aleatorio), c(datos_prueba[,'TipoLesion']))
+as.numeric(performance(prediccionesROC, "auc")@y.values)
+
+plot(performance(prediccionesROC, "tpr", "fpr"),
+colorize = T,
+print.cutoffs.at = seq(0,1,by = 0.1),
+text.adj = c(-0.2,1.7),
+main = 'Curva ROC del modelo')
+```
+
+#### Regresión Logística
+
+##### Creación del modelo
+
+```{r}
+modelo_regresion_logistica <- glm(TipoLesion ~ Rol, data = datos_entrenamiento, family = binomial)
+```
+
+##### Evaluación del modelo
+
+Predicciones:
+
+```{r}
+predicciones_regresion_logistica <- predict(modelo_regresion_logistica, newdata = datos_prueba, type = 'response')
+```
+
+###### Matriz de confusión
+
+```{r}
+matriz_confusion_lr <- table(datos_prueba$TipoLesion, predicciones_regresion_logistica >= 0.5)
+matriz_confusion_lr
+```
+
+**Métricas a partir de la matriz de confusión**
+
+- *Exactitud Total* (observaciones clasificadas apropiadamente) = 84.49%. Hubieron 16731 *Ilesos* y 21340 *No Ilesos* clasificados correctamente, mientras que hubieron 4998 *No Ilesos* y 1986 *Ilesos* clasificados incorrectamente.
+
+\begin{equation}Exactitud=\frac{VP+VN}{Total}\end{equation}
+
+```{r}
+print((matriz_confusion_lr[1,1] + matriz_confusion_lr[2,2]) / sum(matriz_confusion_lr) )
+```
+
+- *Sensibilidad* (porcentaje de positivos verdaderos - de los individuos que realmente resultaron *Ilesos*, ¿cuántas clasificó apropiadamente el modelo?) = 89.38%. (De los 18717 individuos que resultaron *Ilesos*, 16731 fueron clasificados correctamente) 
+
+\begin{equation}\text{Sensibilidad}=\frac{VP}{\text{Total Positivos}}\end{equation}
+
+```{r}
+print(matriz_confusion_lr[1,1] / (matriz_confusion_lr[1,1] + matriz_confusion_lr[1,2]))
+```
+
+- *Precisión* (de las individuos que el modelo determinó que salieron *Ilesos*, ¿cuántos realmente resultaron *Ilesos*?) = 0.76%. De los 18717 individuos que resultaron *Ilesos*, 16731 fueron clasificados correctamente, mientras que 4998 resultaron heridos/muertos.
+
+\begin{equation}\text{Precisión}=\frac{VP}{\text{Total clasificados positivos}}\end{equation}
+
+```{r}
+print(matriz_confusion_lr[1,1] / (matriz_confusion_lr[1,1] + matriz_confusion_lr[2,1] ))
+```
+
+- *Especificidad* (porcentaje de negativos verdaderos - en este caso, de los individuos que realmente resultaron *No Ilesos*, ¿cuántas clasificó apropiadamente el modelo?) = 81.02% (de las 26,338 *No Ilesos*, 21340 fueron correctamente clasificados).
+
+\begin{equation}\text{Especificidad}=\frac{VN}{\text{Total Negativos}}\end{equation}
+
+```{r}
+print(matriz_confusion_lr[2,2] / (matriz_confusion_lr[2,1] + matriz_confusion_lr[2,2]))
+```
+
+
+###### Curva ROC
+
+```{r}
+prediccionesROC = ROCR::prediction(c(predicciones_regresion_logistica), c(datos_prueba[,'TipoLesion']))
+as.numeric(performance(prediccionesROC, "auc")@y.values)
+
+plot(performance(prediccionesROC, "tpr", "fpr"),
+colorize = T,
+print.cutoffs.at = seq(0,1,by = 0.1),
+text.adj = c(-0.2,1.7),
+main = 'Curva ROC del modelo')
+```
+
+
+#### SVM
+
+##### Creación del modelo
+
+```{r}
+modelo_svm <- svm(TipoLesion ~ Rol, data = datos_entrenamiento, kernel='linear',cross=2, scale=FALSE)
+```
+
+##### Evaluación del modelo
+
+Predicciones:
+
+```{r}
+prediccion_svm <- predict(modelo_svm , newdata = datos_prueba)
+```
+
+
+###### Matriz de confusión
+
+```{r}
+matriz_confusion_svm <- table(datos_prueba$TipoLesion, prediccion_svm)
+matriz_confusion_svm
+```
+
+**Métricas a partir de la matriz de confusión**
+
+- *Exactitud Total* (observaciones clasificadas apropiadamente) = 84.49%. Hubieron 16731 *Ilesos* y 21340 *No Ilesos* clasificados correctamente, mientras que hubieron 4998 *No Ilesos* y 1986 *Ilesos* clasificados incorrectamente.
+
+\begin{equation}Exactitud=\frac{VP+VN}{Total}\end{equation}
+
+```{r}
+print((matriz_confusion_svm[1,1] + matriz_confusion_svm[2,2]) / sum(matriz_confusion_svm) )
+```
+
+- *Sensibilidad* (porcentaje de positivos verdaderos - de los individuos que realmente resultaron *Ilesos*, ¿cuántas clasificó apropiadamente el modelo?) = 89.38%. (De los 18717 individuos que resultaron *Ilesos*, 16731 fueron clasificados correctamente) 
+
+\begin{equation}\text{Sensibilidad}=\frac{VP}{\text{Total Positivos}}\end{equation}
+
+```{r}
+print(matriz_confusion_svm[1,1] / (matriz_confusion_svm[1,1] + matriz_confusion_svm[1,2]))
+```
+
+- *Precisión* (de las individuos que el modelo determinó que salieron *Ilesos*, ¿cuántos realmente resultaron *Ilesos*?) = 0.76%. De los 18717 individuos que resultaron *Ilesos*, 16731 fueron clasificados correctamente, mientras que 4998 resultaron heridos/muertos.
+
+\begin{equation}\text{Precisión}=\frac{VP}{\text{Total clasificados positivos}}\end{equation}
+
+```{r}
+print(matriz_confusion_svm[1,1] / (matriz_confusion_svm[1,1] + matriz_confusion_svm[2,1] ))
+```
+
+- *Especificidad* (porcentaje de negativos verdaderos - en este caso, de los individuos que realmente resultaron *No Ilesos*, ¿cuántas clasificó apropiadamente el modelo?) = 81.02% (de las 26,338 *No Ilesos*, 21340 fueron correctamente clasificados).
+
+\begin{equation}\text{Especificidad}=\frac{VN}{\text{Total Negativos}}\end{equation}
+
+```{r}
+print(matriz_confusion_svm[2,2] / (matriz_confusion_svm[2,1] + matriz_confusion_svm[2,2]))
+```
+
+###### Curva ROC
+
+```{r}
+prediccionesROC = ROCR::prediction(c(prediccion_svm), c(datos_prueba[,'TipoLesion']))
+as.numeric(performance(prediccionesROC, "auc")@y.values)
+
+plot(performance(prediccionesROC, "tpr", "fpr"),
+colorize = T,
+print.cutoffs.at = seq(0,1,by = 0.1),
+text.adj = c(-0.2,1.7),
+main = 'Curva ROC del modelo')
+```
+
+
+#### Redes Neuronales
+
+##### Creación del modelo
+
+```{r}
+m <- model.matrix( 
+  ~TipoLesion + Rol,
+  data = datos_entrenamiento 
+)
+
+modelo_red_neuronal <- neuralnet(TipoLesionNo_ileso ~ RolConductor + RolMotociclista, data = m, hidden=4, rep=1, linear.output=T, stepmax=1e6)
+```
+
+##### Evaluación del modelo
+
+```{r}
+plot(modelo_red_neuronal,rep="best")
+```
+
+Predicciones:
+
+```{r}
+
+mp <- model.matrix( 
+  ~TipoLesion + Rol,
+  data = datos_prueba
+)
+
+predicciones_red_neuronal <- neuralnet::compute(modelo_red_neuronal,mp[,c("RolConductor","RolMotociclista")])
+
+results <- data.frame(actual = mp, prediction = predicciones_red_neuronal$net.result)
+head(results)
+```
+
+###### Evaluación
+
+```{r}
+results <- data.frame(actual = datos_prueba$TipoLesion, prediction = predicciones_red_neuronal$net.result)
+head(results)
+```
+
+### Conclusiones
+
+Desarolle conclusiones sobre las clasificaciones de los modelos basado en la evaluación
+
+Se puede ver claramente que los resultados de los modelos son los mismos; la matriz de confusión es la misma para el modelo de arboles de decisión, bosques aleatorios, regresión logística y svm. Por lo tanto la exactitud total, especificidad, precisión y sensibilidad mostrarón los mismos porcentajes, además de que la curva ROC es la misma para estos modelos, con excepción de la regresión logística, la cual varia un poco. Los porcentajes de las métricas de la matriz de confusión rondan todas entre 80-89%, lo cual parece indicar que las predicciones se encuentran en un nivel aceptable.

@@ -154,12 +154,12 @@ Para modelar este caso, se va a utilizar una regresión logística, en el primer
 
 ```{r}
 
-m <- model.matrix( 
+m2 <- model.matrix( 
    ~V16+ V1 + V2 + V3 + V4 + V5 + V6 + V7+ V8+ V9+ V10+ V11+ V12+ V13+ V14+ V15 ,
   data = crx.entrenamiento 
 )
 
-crx.fit <- neuralnet(V16yes ~ V1b+V2 ,data = m,hidden =4,rep=1,linear.output=T)
+crx.fit <- neuralnet(V16yes ~ V1b+V2 ,data = m2,hidden =4,rep=1,linear.output=T)
 ```
 
 Al ver los detalles del modelo 1:
@@ -170,14 +170,14 @@ plot(crx.fit,rep="best")
 **Evaluación**
 
 ```{r}
-mp <- model.matrix( 
+mp2 <- model.matrix( 
    ~V16+ V1 + V2 + V3 + V4 + V5 + V6 + V7+ V8+ V9+ V10+ V11+ V12+ V13+ V14+ V15 ,
   data = crx.prueba 
 )
 
-predicciones.red <- neuralnet::compute(crx.fit,mp[,c("V1b","V2")])
+predicciones.red <- neuralnet::compute(crx.fit,mp2[,c("V1b","V2")])
 
-results <- data.frame(actual = mp, prediction = predicciones.red$net.result)
+results <- data.frame(actual = mp2, prediction = predicciones.red$net.result)
 results
 
 predicciones.redClass=ifelse(predicciones.red$net.result>=0.5,1,0)

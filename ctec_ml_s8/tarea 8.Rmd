@@ -3,6 +3,11 @@ title: "Tarea 8"
 output: html_document
 ---
 
+```{r}
+library("readxl")
+library(dplyr)
+```
+
 # Tarea final
 
 ## Desarrolla una pregunta
@@ -38,3 +43,77 @@ Al final compara el desempeño de los dos modelos. Si es un método no supervisa
 * Comparacion de modelos 25%
     + Evaluación de diferencias
     + Conclusiones
+
+
+# Planteamiento del problema
+
+## Comprensión del problema y justificación de los datos utilizados para el problema
+
+La página del OIJ de estadísticas policiales pone a disposición de los ciudadanos información sobre los delitos ocurridos en todo el país a lo largo de un periodo de tiempo. Después de analizar cada uno de los sitios de "datos abiertos" de las instituciones disponibles, se determinó que esta fuente de datos del OIJ era una de las más adecuada para realizar predicciones debido a que permite realizar consultas basadas en filtros y obtener datos sin procesar. Casi una totalidad de las páginas de datos abiertos solo ofrecen resúmenes de los datos o tablas pivote, lo cual no es útil para el desarrollo del problema. Los datos utilizados corresponden a toda la provincia de Alajuela del año 2016 a la actualidad.
+
+
+## Desarrollo de la pregunta
+
+La pregunta a contestar es, que tan probable es que la victima de un delito en el area de la provincia de Alajuela sea **hombre** o **mujer**?.
+
+
+# Análisis exploratorio
+
+
+## Comprensión de los datos
+
+Para desarrollar el entendimiento de los datos, es necesario primero explicar algunas fallas que se encontraron en la página del OIJ. En primer lugar, si luego de realizar cualquier consulta, el resultado retorna más de 10000 filas, la página falla al tratar de descargar el archivo en formato **xls**, probablemente un *timeout error*, porque fue posible descargar archivos en ese formato con 5000 filas o menos. Por que es relevante este error? Bueno, es el único formato que contenía todas las columnas de forma correcta (las cuales se mencionaran más adelante). En segundo lugar, para descargar un resultado con más de 10000 filas, es necesario seleccionar el formato **csv**, el problema es que este formato tiene las columnas en un orden erroneo. Para explicar mejor veamos los datos de los delitos en el cantón de San Carlos desde el 2000 hasta la actualidad:
+
+```{r}
+delitos_san_carlos <- read_excel("san_carlos_2000-2019.xlsx")
+head(delitos_san_carlos)
+```
+
+Según el dataframe anterior, todo parece estar en orden y las columnas son Delito, SubDelito, Fecha, Hora, Victima, SubVictima, Edad, Genero, Nacionalidad, Provincia, Canton y Distrito.
+
+Pero al cargar el archivo **csv** originado por la página del OIJ, podemos ver que la columna **Hora** no se encuentra dentro del archivo, pero toda la información sigue ahí, en la columna incorrecto (una columna más a la derecha):
+
+```{r}
+delitos_alajuela_original <- read.csv("delitos_alajuela_2016-2019.csv", encoding = "UTF-8")
+head(delitos_alajuela_original)
+```
+
+
+Podemos ver que la información de la **Hora**, esta en la columna de las **Victimas**, la información de las victimas, en la columna de la subvictima y así sucesivamente todo se movió una columna a la derecha. Pero además de todo lo anterior la información de la columna de los **Distritos** ya no se encuentra en los datos. Esto es una lástima porque era información relevante para el análisis, pero es posible trabajar con lo que si se encuentra en el csv, claro, después de hacer las correcciones necesarias en los datos. Por último se decidio utilizar el csv en lugar del excel, simplemente porque se cuenta con más datos; ya que solo fue posible descargar un excel de 5000 filas, mientras que el csv contiene más de 10000.
+
+
+## Corrección de los datos
+
+Primero se van remover la columna **Victima** y **Fecha**, debido a que no posee información relevante para el modelo.
+
+```{r}
+delitos_alajuela <- delitos_alajuela_original %>%
+    select(-SubVictima, -Fecha) # Los datos de la Victima están en la columan Subvictima (error mencionando anteriormente)
+delitos_alajuela
+```
+
+Primero se les asignara los nombres correctos a cada columna, pero además, se van a modificar los nombres de otras dos columnas por completo. **SubDelito** hace referencia al arma o método que se empleo en el delito, por lo cual para un mejor entendimiento, se renombrará a **MetodoEmpleado**. La otra columna es **SubVictima** que hace referencia al **rol** de la victima, como por ejemplo, si es un peatón o un estudiante, por lo cual se renombrará a **RolVictima**.
+
+
+```{r}
+if("SubDelito" %in% colnames(delitos_alajuela))
+{
+  delitos_alajuela <- delitos_alajuela %>% 
+  rename(
+    MetodoEmpleado = SubDelito,
+    Hora = Victima,
+    RolVictima = Edad,
+    Edad = Genero,
+    Genero = Nacionalidad,
+    Nacionalidad = Provincia,
+    Provincia = Canton,
+    Canton = Distrito
+    )
+}
+
+delitos_alajuela
+```
+
+```{r}
+delitos_alajuela[delitos_alajuela$MetodoEmpleado %in% c("DISCUSION/RI&#209;A")] <- "DISCUSION/RIÑA"
+```
